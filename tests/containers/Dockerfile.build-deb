@@ -1,0 +1,17 @@
+FROM ubuntu:24.04 AS build
+
+ENV DEBIAN_FRONTEND=noninteractive
+
+RUN apt-get update && \
+    apt-get install -y --no-install-recommends bash gcc libc6-dev dpkg && \
+    rm -rf /var/lib/apt/lists/*
+
+ARG AZSMB_RELEASE_VERSION
+WORKDIR /src
+COPY . .
+RUN AZSMB_PACKAGE_FORMAT=deb \
+    AZSMB_OUTPUT_DIR=/out \
+    bash ./generate_package.sh
+
+FROM scratch
+COPY --from=build /out/deb/ /

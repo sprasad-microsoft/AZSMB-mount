@@ -1,0 +1,9 @@
+Package: azsmb
+Version: AZSMB_VERSION
+Priority: optional
+Architecture: AZSMB_ARCH
+Origin: Microsoft
+Maintainer: Azure Files Team
+Homepage: https://github.com/Azure/AZSMB-mount
+Description: Mount helper for Azure Files SMB shares
+Depends: bash, util-linux, cifs-utils, azfilesauth

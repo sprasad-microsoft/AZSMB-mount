@@ -1,0 +1,22 @@
+ARG BASE_IMAGE
+FROM ${BASE_IMAGE}
+
+ARG UBUNTU_VERSION
+ENV DEBIAN_FRONTEND=noninteractive
+
+RUN apt-get update && \
+    apt-get install -y --no-install-recommends ca-certificates curl && \
+    curl -fsSLo /tmp/packages-microsoft-prod.deb \
+      "https://packages.microsoft.com/config/ubuntu/${UBUNTU_VERSION}/packages-microsoft-prod.deb" && \
+    dpkg -i /tmp/packages-microsoft-prod.deb && \
+    rm /tmp/packages-microsoft-prod.deb && \
+    apt-get update
+
+COPY artifacts/azsmb.deb /tmp/azsmb.deb
+COPY source /workspace
+RUN apt-get install -y --no-install-recommends /tmp/azsmb.deb && \
+  rm -rf /var/lib/apt/lists/* && \
+    test -x /sbin/mount.azsmb && \
+    test -x /opt/microsoft/azsmb/mountscript.sh && \
+    command -v azfilesauthmanager >/dev/null && \
+    AZSMB_REPO_ROOT=/workspace bash /workspace/tests/run-unit-tests.sh
