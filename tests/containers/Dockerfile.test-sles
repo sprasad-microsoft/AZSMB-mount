@@ -1,0 +1,18 @@
+FROM registry.suse.com/bci/bci-base:15.6
+
+RUN zypper --non-interactive install --no-recommends ca-certificates curl && \
+    curl -fsSLo /tmp/packages-microsoft-prod.rpm \
+      https://packages.microsoft.com/config/sles/15/packages-microsoft-prod.rpm && \
+    rpm -i /tmp/packages-microsoft-prod.rpm && \
+    rm /tmp/packages-microsoft-prod.rpm && \
+    zypper --gpg-auto-import-keys refresh && \
+    zypper --non-interactive addlock aznfs && \
+    zypper --non-interactive install --no-recommends cifs-utils azfilesauth
+
+COPY artifacts/azsmb.rpm /tmp/azsmb.rpm
+COPY source /workspace
+RUN zypper --non-interactive --no-gpg-checks install --no-recommends /tmp/azsmb.rpm && \
+    test -x /sbin/mount.azsmb && \
+    test -x /opt/microsoft/azsmb/mountscript.sh && \
+    command -v azfilesauthmanager >/dev/null && \
+    AZSMB_REPO_ROOT=/workspace bash /workspace/tests/run-unit-tests.sh

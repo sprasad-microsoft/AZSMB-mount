@@ -1,0 +1,6 @@
+.git
+.github
+out
+*.tar.gz
+*.deb
+*.rpm

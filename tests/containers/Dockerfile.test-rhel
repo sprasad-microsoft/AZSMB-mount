@@ -1,0 +1,17 @@
+FROM quay.io/rockylinux/rockylinux:9.6
+
+RUN dnf install -y --setopt=install_weak_deps=False ca-certificates && \
+    curl -fsSLo /tmp/packages-microsoft-prod.rpm \
+      https://packages.microsoft.com/config/rhel/9/packages-microsoft-prod.rpm && \
+    rpm -i /tmp/packages-microsoft-prod.rpm && \
+    rm /tmp/packages-microsoft-prod.rpm && \
+    dnf install -y --setopt=install_weak_deps=False cifs-utils azfilesauth && \
+    dnf clean all
+
+COPY artifacts/azsmb.rpm /tmp/azsmb.rpm
+COPY source /workspace
+RUN dnf install -y --setopt=install_weak_deps=False /tmp/azsmb.rpm && \
+    test -x /sbin/mount.azsmb && \
+    test -x /opt/microsoft/azsmb/mountscript.sh && \
+    command -v azfilesauthmanager >/dev/null && \
+    AZSMB_REPO_ROOT=/workspace bash /workspace/tests/run-unit-tests.sh

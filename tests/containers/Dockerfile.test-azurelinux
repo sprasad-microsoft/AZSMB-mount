@@ -1,0 +1,11 @@
+FROM mcr.microsoft.com/azurelinux/base/core:3.0
+
+RUN tdnf install -y ca-certificates cifs-utils azfilesauth && tdnf clean all
+
+COPY artifacts/azsmb.rpm /tmp/azsmb.rpm
+COPY source /workspace
+RUN tdnf install -y /tmp/azsmb.rpm && \
+    test -x /sbin/mount.azsmb && \
+    test -x /opt/microsoft/azsmb/mountscript.sh && \
+    command -v azfilesauthmanager >/dev/null && \
+    AZSMB_REPO_ROOT=/workspace bash /workspace/tests/run-unit-tests.sh

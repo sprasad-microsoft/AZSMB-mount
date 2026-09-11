@@ -1,0 +1,14 @@
+FROM mcr.microsoft.com/azurelinux/base/core:3.0 AS build
+
+RUN tdnf install -y bash gcc binutils glibc-devel rpm-build python3 coreutils findutils && \
+    tdnf clean all
+
+ARG AZSMB_RELEASE_VERSION
+WORKDIR /src
+COPY . .
+RUN AZSMB_PACKAGE_FORMAT=rpm \
+    AZSMB_OUTPUT_DIR=/out \
+    bash ./generate_package.sh
+
+FROM scratch
+COPY --from=build /out/rpm/ /

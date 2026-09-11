@@ -1,0 +1,27 @@
+#!/bin/bash
+
+set -e
+
+test -x /sbin/mount.azsmb || {
+	printf 'ERROR: /sbin/mount.azsmb is missing or not executable\n' >&2
+	exit 1
+}
+test -f /opt/microsoft/azsmb/mountscript.sh || {
+	printf 'ERROR: AZSMB mount script is missing\n' >&2
+	exit 1
+}
+test -f /opt/microsoft/azsmb/common.sh || {
+	printf 'ERROR: AZSMB common library is missing\n' >&2
+	exit 1
+}
+command -v azfilesauthmanager >/dev/null || {
+	printf 'ERROR: azfilesauthmanager was not installed by the azfilesauth dependency\n' >&2
+	exit 1
+}
+
+chown root:root /sbin/mount.azsmb
+chmod 0755 /sbin/mount.azsmb
+chown -R root:root /opt/microsoft/azsmb
+chmod 0755 /opt/microsoft/azsmb /opt/microsoft/azsmb/mountscript.sh
+chmod 0644 /opt/microsoft/azsmb/common.sh
+install -d -o root -g root -m 0750 /opt/microsoft/azsmb/data
