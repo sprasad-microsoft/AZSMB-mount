@@ -72,6 +72,23 @@ Managed-identity mounts require the `azfilesauth` package and the Azure-side
 SMBOAuth, identity assignment, and RBAC configuration described in the Azure
 Files documentation.
 
+## Boot-time managed-identity mounts
+
+For an SMB share that should be mounted by `fstab` at boot, include `_netdev`
+and `nofail`, and pass `client_id=system` or the user-assigned identity client
+ID. For example:
+
+```fstab
+//<storage-account>.file.core.windows.net/<share> /mnt/azurefiles azsmb _netdev,nofail,client_id=system 0 0
+```
+
+The AZSMB package enables `azfilesrefresh.service` when it is installed. The
+mount helper prepares managed-identity credentials and then starts and enables
+the refresh service, so systemd-generated `fstab` mount units can obtain and
+refresh Kerberos credentials during boot. `SMBOAuth`, identity assignment,
+RBAC, DNS, and network access to the Azure Files endpoint must be configured
+before reboot.
+
 ## Option policy
 
 When absent, AZSMB adds `nosharesock`, `actimeo=30`, and `mfsymlinks`. It does
@@ -105,6 +122,11 @@ and status files are written under
 `/tmp/azsmb-test-results` by default. Set `AZSMB_CONTAINER_TIMEOUT` to change
 the default 1,200-second limit for each distro build. Set
 `AZSMB_DOCKER_NO_CACHE=1` when a clean dependency rebuild is required.
+
+Set `AZSMB_RUN_FSTAB_MI_E2E=1` for the host-level `fstab` managed-identity
+test. It uses a temporary entry with `_netdev`, `nofail`, and explicit
+`azfilesrefresh.service` ordering, then restores `/etc/fstab` and unmounts the
+share.
 
 Live mount E2E tests must also run on the Azure VM `vmname`. Do not run them on
 a development workstation. Use

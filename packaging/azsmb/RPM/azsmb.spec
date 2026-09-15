@@ -34,6 +34,11 @@ install -m 0644 %{_sourcedir}/LICENSE %{buildroot}%{_licensedir}/%{name}/LICENSE
 /opt/microsoft/azsmb/common.sh
 %dir %attr(0750,root,root) /opt/microsoft/azsmb/data
 
+%post
+if command -v systemctl >/dev/null 2>&1 && systemctl list-unit-files azfilesrefresh.service >/dev/null 2>&1; then
+	systemctl enable azfilesrefresh.service >/dev/null 2>&1 || :
+fi
+
 %changelog
 * Fri Sep 11 2026 Azure Files Team - 0.1.0-1
 - Initial package
