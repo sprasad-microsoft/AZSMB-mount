@@ -72,11 +72,15 @@ Managed-identity mounts require the `azfilesauth` package and the Azure-side
 SMBOAuth, identity assignment, and RBAC configuration described in the Azure
 Files documentation.
 
-## Boot-time managed-identity mounts
+## Boot-time mounts from fstab
 
-For an SMB share that should be mounted by `fstab` at boot, include `_netdev`
-and `nofail`, and pass `client_id=system` or the user-assigned identity client
-ID. For example:
+For any SMB share that should be mounted by `fstab` at boot, include `_netdev`
+and `nofail`. AZSMB supports both managed-identity and storage-key entries.
+
+### Managed identity
+
+Pass `client_id=system` for a system-assigned identity or the user-assigned
+identity client ID for a user-assigned identity:
 
 ```fstab
 //<storage-account>.file.core.windows.net/<share> /mnt/azurefiles azsmb _netdev,nofail,client_id=system 0 0
@@ -88,6 +92,31 @@ the refresh service, so systemd-generated `fstab` mount units can obtain and
 refresh Kerberos credentials during boot. `SMBOAuth`, identity assignment,
 RBAC, DNS, and network access to the Azure Files endpoint must be configured
 before reboot.
+
+### Storage account keys
+
+For a key-based boot mount, provide both keys when dual-key rotation is needed:
+
+```fstab
+//<storage-account>.file.core.windows.net/<share> /mnt/azurefiles azsmb _netdev,nofail,key1=<primary-key>,key2=<secondary-key> 0 0
+```
+
+AZSMB creates `/etc/smbcredentials/<storage-account>.cred` before delegating
+to CIFS. `key2` requires Linux kernel 6.9 or later. A single-key entry can
+omit `key2`:
+
+```fstab
+//<storage-account>.file.core.windows.net/<share> /mnt/azurefiles azsmb _netdev,nofail,key1=<primary-key> 0 0
+```
+
+The storage account key values must be protected in `/etc/fstab`; use the
+standard file permissions and access controls for that file. `SMBOAuth` and
+`azfilesrefresh.service` are required only for managed-identity entries.
+
+The opt-in fstab tests are `tests/e2e/test_fstab_managed_identity.sh` and
+`tests/e2e/test_fstab_storage_keys.sh`. Run the key test directly as root on
+the test VM with `AZSMB_KEY1` and `AZSMB_KEY2` set in that VM's environment;
+do not place keys in source control or pass them through VM command text.
 
 ## Option policy
 
