@@ -27,3 +27,7 @@ fi
 if [[ "${AZSMB_RUN_FSTAB_MI_E2E:-0}" == "1" ]]; then
 	bash "$AZSMB_REPO_ROOT/tests/e2e/test_fstab_managed_identity.sh"
 fi
+
+if [[ "${AZSMB_RUN_FSTAB_KEY_E2E:-0}" == "1" ]]; then
+	bash "$AZSMB_REPO_ROOT/tests/e2e/test_fstab_storage_keys.sh"
+fi
