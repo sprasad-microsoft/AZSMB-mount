@@ -56,11 +56,22 @@ assert_not_contains()
 	tests_run=$((tests_run + 1))
 }
 
+assert_equal()
+{
+	local expected="$1"
+	local actual="$2"
+	local description="$3"
+
+	[[ "$actual" == "$expected" ]] || fail "$description: expected '$expected', got '$actual'"
+	tests_run=$((tests_run + 1))
+}
+
 set_os_release()
 {
 	AZSMB_OS_RELEASE_FILE="$TEST_TMPDIR/os-release"
 	AZSMB_AUTH_CONFIG_FILE="$TEST_TMPDIR/config.yaml"
-	export AZSMB_OS_RELEASE_FILE AZSMB_AUTH_CONFIG_FILE
+	AZSMB_CREDENTIAL_DIR="$TEST_TMPDIR/smbcredentials"
+	export AZSMB_OS_RELEASE_FILE AZSMB_AUTH_CONFIG_FILE AZSMB_CREDENTIAL_DIR
 	printf 'ID=%s\nVERSION_ID="%s"\n' "$1" "$2" > "$AZSMB_OS_RELEASE_FILE"
 	printf 'USER_UID: 1234\n' > "$AZSMB_AUTH_CONFIG_FILE"
 }
@@ -70,6 +81,7 @@ test_source_validation()
 	assert_succeeds "public endpoint" azsmb_validate_source "//account.file.core.windows.net/share"
 	assert_succeeds "private endpoint" azsmb_validate_source "//account.privatelink.file.core.windows.net/share"
 	assert_succeeds "government endpoint" azsmb_validate_source "//account.file.core.usgovcloudapi.net/share"
+	assert_succeeds "prefixed endpoint" azsmb_validate_source "//account.file.z20.core.windows.net/share"
 	assert_fails "non-Azure endpoint" azsmb_validate_source "//server.example.com/share"
 	assert_fails "nested path" azsmb_validate_source "//account.file.core.windows.net/share/path"
 }
@@ -81,7 +93,69 @@ test_auth_conflicts()
 	assert_succeeds "user MI" azsmb_validate_auth_options "client_id=00000000-0000-0000-0000-000000000001"
 	assert_fails "MI with credential file" azsmb_validate_auth_options "client_id=system,credentials=/tmp/account.cred"
 	assert_fails "MI with password" azsmb_validate_auth_options "client_id=system,password=secret"
+	assert_fails "MI with key1" azsmb_validate_auth_options "client_id=system,key1=secret"
 	assert_fails "invalid client ID" azsmb_validate_auth_options "client_id=not-a-client-id"
+	assert_fails "key2 without key1" azsmb_validate_auth_options "key2=secondary"
+	assert_fails "key1 with credentials" azsmb_validate_auth_options "key1=primary,credentials=/tmp/account.cred"
+}
+
+test_storage_key_options()
+{
+	local actual
+	local credential_file
+
+	set_os_release ubuntu 24.04
+	AZSMB_KERNEL_RELEASE=6.9.0
+	AZSMB_CIFS_UTILS_VERSION=7.0
+	export AZSMB_KERNEL_RELEASE AZSMB_CIFS_UTILS_VERSION
+	actual=$(azsmb_prepare_storage_keys \
+		"//account.file.z20.core.windows.net/share" \
+		"key1=primary,key2=secondary")
+	credential_file="$AZSMB_CREDENTIAL_DIR/account.cred"
+	assert_contains "$actual" "credentials=$credential_file" "credential file option"
+	assert_not_contains "$actual" "key1=" "key1 helper option removed"
+	assert_not_contains "$actual" "key2=" "key2 helper option removed"
+	assert_equal $'username=account\npassword=primary\npassword2=secondary' \
+		"$(cat "$credential_file")" "dual-key credential content"
+	assert_equal "600" "$(stat -c '%a' "$credential_file")" "credential file permissions"
+
+	assert_fails "dual-key remount rejected below cifs-utils 7.2" azsmb_prepare_storage_keys \
+		"//account.file.core.windows.net/share" \
+		"remount,key1=primary,key2=replaced-secondary"
+	AZSMB_CIFS_UTILS_VERSION=7.2
+	actual=$(azsmb_prepare_storage_keys \
+		"//account.file.core.windows.net/share" \
+		"remount,key1=primary,key2=replaced-secondary")
+	assert_contains "$actual" "remount" "key2-change remount preserved"
+	assert_contains "$actual" "username=account" "storage account username delegated"
+	assert_contains "$actual" "password2=replaced-secondary" "changed key2 delegated"
+	assert_not_contains "$actual" "credentials=" "credential file omitted from dual-key remount"
+	assert_equal $'username=account\npassword=primary\npassword2=replaced-secondary' \
+		"$(cat "$credential_file")" "changed key2 stored as password2"
+
+	actual=$(azsmb_prepare_storage_keys \
+		"//account.file.core.windows.net/share" \
+		"remount,key1=replaced-primary,key2=replaced-secondary")
+	assert_contains "$actual" "password2=replaced-primary" "changed key1 delegated as password2"
+	assert_equal $'username=account\npassword=replaced-secondary\npassword2=replaced-primary' \
+		"$(cat "$credential_file")" "unchanged key2 promoted to password"
+
+	assert_fails "unchanged dual-key remount rejected" azsmb_prepare_storage_keys \
+		"//account.file.core.windows.net/share" \
+		"remount,key1=replaced-secondary,key2=replaced-primary"
+	assert_fails "two changed keys rejected" azsmb_prepare_storage_keys \
+		"//account.file.core.windows.net/share" \
+		"remount,key1=new-primary,key2=new-secondary"
+
+	rm -f "$credential_file"
+	assert_fails "dual-key remount requires credential file" azsmb_prepare_storage_keys \
+		"//account.file.core.windows.net/share" \
+		"remount,key1=primary,key2=secondary"
+
+	AZSMB_KERNEL_RELEASE=6.8.99
+	assert_fails "key2 rejected below kernel 6.9" azsmb_prepare_storage_keys \
+		"//account.file.core.windows.net/share" \
+		"key1=primary,key2=secondary"
 }
 
 test_mi_option_translation()
@@ -165,6 +239,7 @@ EOF
 
 test_source_validation
 test_auth_conflicts
+test_storage_key_options
 test_mi_option_translation
 test_mi_distro_gate
 test_controlled_options

@@ -10,6 +10,7 @@ else
 fi
 
 AZSMB_AUTH_CONFIG_FILE="${AZSMB_AUTH_CONFIG_FILE:-/etc/azfilesauth/config.yaml}"
+AZSMB_CREDENTIAL_DIR="${AZSMB_CREDENTIAL_DIR:-/etc/smbcredentials}"
 
 azsmb_usage()
 {
@@ -36,7 +37,7 @@ azsmb_validate_source()
 		return 1
 	fi
 
-	if [[ "$host" =~ ^[a-z0-9][a-z0-9-]{1,22}[a-z0-9](\.privatelink)?\.file(\.preprod)?\.core\.(windows\.net|usgovcloudapi\.net|chinacloudapi\.cn)$ ]]; then
+	if [[ "$host" =~ ^[a-z0-9][a-z0-9-]{1,22}[a-z0-9](\.privatelink)?\.file(\.[a-z0-9-]+)?\.core\.(windows\.net|usgovcloudapi\.net|chinacloudapi\.cn)$ ]]; then
 		return 0
 	fi
 	if [[ "$host" =~ ^[a-z0-9][a-z0-9-]{1,22}[a-z0-9](\.privatelink)?\.file\.storage\.azure\.net$ ]]; then
@@ -52,6 +53,14 @@ azsmb_source_host()
 	local path="${1#//}"
 
 	printf '%s\n' "${path%%/*}"
+}
+
+azsmb_storage_account()
+{
+	local host
+
+	host=$(azsmb_source_host "$1")
+	printf '%s\n' "${host%%.*}"
 }
 
 azsmb_validate_client_id()
@@ -70,23 +79,180 @@ azsmb_validate_auth_options()
 	local options="$1"
 	local client_id
 	local conflicting
+	local key1
+	local key2
 
-	client_id=$(azsmb_option_value "$options" client_id) || return 0
-	if [[ -z "$client_id" ]]; then
-		azsmb_error "client_id must not be empty"
-		return 1
-	fi
-	if ! azsmb_validate_client_id "$client_id"; then
-		azsmb_error "client_id must be 'system' or a managed identity client ID"
-		return 1
-	fi
-
-	for conflicting in credentials username password password2; do
-		if azsmb_option_present "$options" "$conflicting"; then
-			azsmb_error "client_id cannot be combined with $conflicting"
+	if client_id=$(azsmb_option_value "$options" client_id); then
+		if [[ -z "$client_id" ]]; then
+			azsmb_error "client_id must not be empty"
 			return 1
 		fi
-	done
+		if ! azsmb_validate_client_id "$client_id"; then
+			azsmb_error "client_id must be 'system' or a managed identity client ID"
+			return 1
+		fi
+
+		for conflicting in credentials username password password2 key1 key2; do
+			if azsmb_option_present "$options" "$conflicting"; then
+				azsmb_error "client_id cannot be combined with $conflicting"
+				return 1
+			fi
+		done
+	fi
+
+	if key2=$(azsmb_option_value "$options" key2); then
+		if ! key1=$(azsmb_option_value "$options" key1) || [[ -z "$key1" ]]; then
+			azsmb_error "key2 requires key1"
+			return 1
+		fi
+		if [[ -z "$key2" ]]; then
+			azsmb_error "key2 must not be empty"
+			return 1
+		fi
+	fi
+
+	if key1=$(azsmb_option_value "$options" key1); then
+		if [[ -z "$key1" ]]; then
+			azsmb_error "key1 must not be empty"
+			return 1
+		fi
+		for conflicting in credentials username password password2; do
+			if azsmb_option_present "$options" "$conflicting"; then
+				azsmb_error "key1 cannot be combined with $conflicting"
+				return 1
+			fi
+		done
+	fi
+}
+
+azsmb_write_credential_file()
+{
+	local account="$1"
+	local credential_file="$2"
+	local password="$3"
+	local password2="$4"
+	local temporary_file
+
+	install -d -o root -g root -m 0700 "$AZSMB_CREDENTIAL_DIR" || {
+		azsmb_error "failed to create $AZSMB_CREDENTIAL_DIR"
+		return 1
+	}
+	temporary_file=$(mktemp "$AZSMB_CREDENTIAL_DIR/.${account}.cred.XXXXXX") || {
+		azsmb_error "failed to create a temporary credential file"
+		return 1
+	}
+	if ! chmod 0600 "$temporary_file"; then
+		rm -f "$temporary_file"
+		azsmb_error "failed to secure the temporary credential file"
+		return 1
+	fi
+	if ! {
+		printf 'username=%s\n' "$account"
+		printf 'password=%s\n' "$password"
+		if [[ -n "$password2" ]]; then
+			printf 'password2=%s\n' "$password2"
+		fi
+	} > "$temporary_file"; then
+		rm -f "$temporary_file"
+		azsmb_error "failed to write the temporary credential file"
+		return 1
+	fi
+	if ! chown root:root "$temporary_file"; then
+		rm -f "$temporary_file"
+		azsmb_error "failed to secure the temporary credential file"
+		return 1
+	fi
+	mv -f "$temporary_file" "$credential_file" || {
+		rm -f "$temporary_file"
+		azsmb_error "failed to install $credential_file"
+		return 1
+	}
+}
+
+azsmb_prepare_storage_keys()
+{
+	local source="$1"
+	local options="$2"
+	local account
+	local changed_key
+	local credential_file
+	local existing_password
+	local existing_password2
+	local key1_changed
+	local key2_changed
+	local key1
+	local key2=""
+	local unchanged_key
+
+	key1=$(azsmb_option_value "$options" key1) || {
+		printf '%s\n' "$options"
+		return 0
+	}
+	if azsmb_option_value "$options" key2 >/dev/null; then
+		key2=$(azsmb_option_value "$options" key2)
+		if ! azsmb_password2_supported; then
+			azsmb_error "key2 requires Linux kernel 6.9 or later"
+			return 1
+		fi
+	fi
+
+	if [[ "$key1" == *$'\n'* || "$key2" == *$'\n'* ]]; then
+		azsmb_error "storage account keys must not contain newlines"
+		return 1
+	fi
+
+	account=$(azsmb_storage_account "$source")
+	credential_file="$AZSMB_CREDENTIAL_DIR/$account.cred"
+
+	options=$(azsmb_remove_option "$options" key1)
+	options=$(azsmb_remove_option "$options" key2)
+	if azsmb_option_present "$options" remount && [[ -n "$key2" ]]; then
+		if ! azsmb_dual_key_remount_supported; then
+			azsmb_error "dual-key remount requires cifs-utils 7.2 or later"
+			return 1
+		fi
+		if [[ ! -r "$credential_file" ]]; then
+			azsmb_error "dual-key remount requires existing $credential_file"
+			return 1
+		fi
+		existing_password=$(sed -n 's/^password=//p' "$credential_file" | head -n 1)
+		existing_password2=$(sed -n 's/^password2=//p' "$credential_file" | head -n 1)
+		if [[ -z "$existing_password" ]]; then
+			azsmb_error "password is missing from $credential_file"
+			return 1
+		fi
+
+		key1_changed=0
+		key2_changed=0
+		[[ "$key1" == "$existing_password" ]] || key1_changed=1
+		[[ "$key2" == "$existing_password2" ]] || key2_changed=1
+		if (( key1_changed + key2_changed != 1 )); then
+			azsmb_error "dual-key remount requires exactly one changed key"
+			return 1
+		fi
+
+		if (( key1_changed )); then
+			unchanged_key="$key2"
+			changed_key="$key1"
+		else
+			unchanged_key="$key1"
+			changed_key="$key2"
+		fi
+		azsmb_write_credential_file \
+			"$account" "$credential_file" "$unchanged_key" "$changed_key" || return 1
+		options=$(azsmb_remove_option "$options" credentials)
+		options=$(azsmb_remove_option "$options" password2)
+		options=$(azsmb_remove_option "$options" username)
+		options=$(azsmb_append_option "$options" "username=$account")
+		options=$(azsmb_append_option "$options" "password2=$changed_key")
+		printf '%s\n' "$options"
+		return 0
+	fi
+
+	azsmb_write_credential_file \
+		"$account" "$credential_file" "$key1" "$key2" || return 1
+	options=$(azsmb_append_option "$options" "credentials=$credential_file")
+	printf '%s\n' "$options"
 }
 
 azsmb_credential_uid()
@@ -218,6 +384,7 @@ azsmb_main()
 
 	azsmb_validate_source "$source" || return 1
 	azsmb_validate_auth_options "$options" || return 1
+	options=$(azsmb_prepare_storage_keys "$source" "$options") || return 1
 	options=$(azsmb_prepare_managed_identity "$source" "$options") || return 1
 	options=$(azsmb_add_default_options "$options") || return 1
 

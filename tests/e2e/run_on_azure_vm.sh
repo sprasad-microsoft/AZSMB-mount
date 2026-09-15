@@ -27,13 +27,14 @@ export AZSMB_EXPECTED_HOSTNAME='${AZSMB_EXPECTED_HOSTNAME:-vmname}'
 export AZURE_STORAGE_ACCOUNT='${AZURE_STORAGE_ACCOUNT:-}'
 export AZURE_FILE_SHARE='${AZURE_FILE_SHARE:-}'
 export AZSMB_CREDENTIAL_FILE='${AZSMB_CREDENTIAL_FILE:-}'
+export AZSMB_TEST_REMOUNT='${AZSMB_TEST_REMOUNT:-0}'
 export AZSMB_MI_CLIENT_ID='${AZSMB_MI_CLIENT_ID:-}'
 export AZURE_USER_ASSIGNED_MI_CLIENT_ID='${AZURE_USER_ASSIGNED_MI_CLIENT_ID:-}'
 export AZSMB_RUN_KEY_E2E='${AZSMB_RUN_KEY_E2E:-0}'
 export AZSMB_RUN_SYSTEM_MI_E2E='${AZSMB_RUN_SYSTEM_MI_E2E:-0}'
 export AZSMB_RUN_USER_MI_E2E='${AZSMB_RUN_USER_MI_E2E:-0}'
 if [[ "\$AZSMB_RUN_KEY_E2E" == "1" && -z "\$AZSMB_CREDENTIAL_FILE" ]]; then
-	echo 'AZSMB_CREDENTIAL_FILE must name an existing credential file on the VM' >&2
+	echo 'AZSMB_CREDENTIAL_FILE must name an existing credential file on the VM; run key1/key2 tests directly on the VM' >&2
 	exit 1
 fi
 sudo -E bash tests/run-tests.sh
