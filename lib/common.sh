@@ -137,6 +137,54 @@ azsmb_rasize_supported()
 	(( major > 6 || (major == 6 && minor >= 4) ))
 }
 
+azsmb_password2_supported()
+{
+	local kernel_release
+	local major
+	local minor
+
+	kernel_release=$(azsmb_kernel_release)
+	if [[ ! "$kernel_release" =~ ^([0-9]+)\.([0-9]+) ]]; then
+		return 1
+	fi
+
+	major="${BASH_REMATCH[1]}"
+	minor="${BASH_REMATCH[2]}"
+	(( major > 6 || (major == 6 && minor >= 9) ))
+}
+
+azsmb_cifs_utils_version()
+{
+	local output
+	local version
+
+	if [[ -n "${AZSMB_CIFS_UTILS_VERSION:-}" ]]; then
+		printf '%s\n' "$AZSMB_CIFS_UTILS_VERSION"
+		return 0
+	fi
+
+	if ! output=$(mount.cifs -V 2>&1); then
+		azsmb_error "failed to determine the cifs-utils version"
+		return 1
+	fi
+	version=$(printf '%s\n' "$output" | \
+		sed -n 's/^mount\.cifs version:[[:space:]]*//p' | head -n 1)
+	if [[ -z "$version" ]]; then
+		azsmb_error "failed to parse the cifs-utils version"
+		return 1
+	fi
+
+	printf '%s\n' "$version"
+}
+
+azsmb_dual_key_remount_supported()
+{
+	local version
+
+	version=$(azsmb_cifs_utils_version) || return 1
+	azsmb_version_ge "$version" "7.2"
+}
+
 azsmb_option_present()
 {
 	local options="$1"

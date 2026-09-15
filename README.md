@@ -18,6 +18,37 @@ sudo mount -t azsmb \
 	-o credentials=/etc/smbcredentials/<storage-account>.cred
 ```
 
+AZSMB can also create the per-account credential file from one or both storage
+account keys. `key2` requires Linux kernel 6.9 or later:
+
+```bash
+sudo mount -t azsmb \
+	//<storage-account>.file.core.windows.net/<share> /mnt/azurefiles \
+	-o key1=<primary-key>,key2=<secondary-key>
+```
+
+The helper parses the storage account name from the server FQDN and atomically
+writes `/etc/smbcredentials/<storage-account>.cred` with mode `0600`. The file
+contains `username=<storage-account>`, `password=<key1>`, and, when supplied,
+`password2=<key2>`. Only the resulting `credentials=` option is passed to CIFS;
+`key1` and `key2` are removed from the delegated option list.
+
+To rotate a key on an existing dual-key mount, pass `remount` with both current
+key values and change exactly one of them. AZSMB compares `key1` with the stored
+`password` and `key2` with the stored `password2`. It rewrites the credential
+file with the unchanged key as `password` and the changed key as `password2`,
+then delegates the remount with only `password2=<changed-key>`. This remount
+operation requires cifs-utils 7.2 or later:
+
+```bash
+sudo mount -t azsmb \
+	//<storage-account>.file.core.windows.net/<share> /mnt/azurefiles \
+	-o remount,key1=<new-primary-key>,key2=<new-secondary-key>
+```
+
+The remount is rejected if neither key changed, both keys changed, or the
+per-account credential file does not already exist.
+
 System-assigned managed identity:
 
 ```bash
@@ -94,6 +125,10 @@ E2E tests take their Azure inputs from environment variables. Storage-key
 testing requires `AZURE_STORAGE_ACCOUNT`, `AZURE_FILE_SHARE`, and
 `AZSMB_CREDENTIAL_FILE`, which must refer to a root-readable file already on
 the VM. Storage keys are never passed through Azure VM Run Command.
+When the test is launched directly on the VM, set `AZSMB_KEY1` and optionally
+`AZSMB_KEY2` to exercise generated credentials. Set `AZSMB_TEST_REMOUNT=1` and
+optionally `AZSMB_REMOUNT_KEY1`/`AZSMB_REMOUNT_KEY2` to exercise credential-file
+replacement and remount behavior.
 Managed-identity testing requires
 `AZURE_STORAGE_ACCOUNT`, `AZURE_FILE_SHARE`, and `AZSMB_MI_CLIENT_ID`; use
 `AZSMB_MI_CLIENT_ID=system` for the system-assigned identity.

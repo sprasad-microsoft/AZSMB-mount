@@ -13,6 +13,8 @@ int main(int argc, char *argv[])
 	unsetenv("LD_LIBRARY_PATH");
 	unsetenv("LD_PRELOAD");
 	unsetenv("AZSMB_AUTH_CONFIG_FILE");
+	unsetenv("AZSMB_CIFS_UTILS_VERSION");
+	unsetenv("AZSMB_CREDENTIAL_DIR");
 	unsetenv("AZSMB_ENVIRONMENT");
 	unsetenv("AZSMB_KERNEL_RELEASE");
 	unsetenv("AZSMB_OS_RELEASE_FILE");

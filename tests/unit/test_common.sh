@@ -125,6 +125,28 @@ test_rasize_threshold()
 	assert_true "rasize above kernel 6.4" azsmb_rasize_supported
 }
 
+test_password2_threshold()
+{
+	AZSMB_KERNEL_RELEASE=6.8.99
+	export AZSMB_KERNEL_RELEASE
+	assert_false "password2 below kernel 6.9" azsmb_password2_supported
+	AZSMB_KERNEL_RELEASE=6.9.0-azure
+	assert_true "password2 at kernel 6.9" azsmb_password2_supported
+	AZSMB_KERNEL_RELEASE=7.0.0
+	assert_true "password2 above kernel 6.9" azsmb_password2_supported
+}
+
+test_cifs_utils_threshold()
+{
+	AZSMB_CIFS_UTILS_VERSION=7.1
+	export AZSMB_CIFS_UTILS_VERSION
+	assert_false "dual-key remount below cifs-utils 7.2" azsmb_dual_key_remount_supported
+	AZSMB_CIFS_UTILS_VERSION=7.2
+	assert_true "dual-key remount at cifs-utils 7.2" azsmb_dual_key_remount_supported
+	AZSMB_CIFS_UTILS_VERSION=7.7
+	assert_true "dual-key remount above cifs-utils 7.2" azsmb_dual_key_remount_supported
+}
+
 test_default_options()
 {
 	local actual
@@ -144,6 +166,8 @@ test_default_options()
 test_mi_distro_matrix
 test_multichannel_thresholds
 test_rasize_threshold
+test_password2_threshold
+test_cifs_utils_threshold
 test_default_options
 
 printf 'PASS: %d assertions\n' "$tests_run"
