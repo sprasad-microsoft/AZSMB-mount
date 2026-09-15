@@ -23,3 +23,7 @@ if [[ "${AZSMB_RUN_USER_MI_E2E:-0}" == "1" ]]; then
 	AZSMB_MI_CLIENT_ID="$AZURE_USER_ASSIGNED_MI_CLIENT_ID" \
 		bash "$AZSMB_REPO_ROOT/tests/e2e/test_managed_identity.sh"
 fi
+
+if [[ "${AZSMB_RUN_FSTAB_MI_E2E:-0}" == "1" ]]; then
+	bash "$AZSMB_REPO_ROOT/tests/e2e/test_fstab_managed_identity.sh"
+fi

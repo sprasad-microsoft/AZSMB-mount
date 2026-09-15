@@ -25,3 +25,7 @@ chown -R root:root /opt/microsoft/azsmb
 chmod 0755 /opt/microsoft/azsmb /opt/microsoft/azsmb/mountscript.sh
 chmod 0644 /opt/microsoft/azsmb/common.sh
 install -d -o root -g root -m 0750 /opt/microsoft/azsmb/data
+
+if command -v systemctl >/dev/null 2>&1 && systemctl list-unit-files azfilesrefresh.service >/dev/null 2>&1; then
+	systemctl enable azfilesrefresh.service >/dev/null 2>&1 || true
+fi

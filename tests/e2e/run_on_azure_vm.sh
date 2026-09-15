@@ -33,6 +33,7 @@ export AZURE_USER_ASSIGNED_MI_CLIENT_ID='${AZURE_USER_ASSIGNED_MI_CLIENT_ID:-}'
 export AZSMB_RUN_KEY_E2E='${AZSMB_RUN_KEY_E2E:-0}'
 export AZSMB_RUN_SYSTEM_MI_E2E='${AZSMB_RUN_SYSTEM_MI_E2E:-0}'
 export AZSMB_RUN_USER_MI_E2E='${AZSMB_RUN_USER_MI_E2E:-0}'
+export AZSMB_RUN_FSTAB_MI_E2E='${AZSMB_RUN_FSTAB_MI_E2E:-0}'
 if [[ "\$AZSMB_RUN_KEY_E2E" == "1" && -z "\$AZSMB_CREDENTIAL_FILE" ]]; then
 	echo 'AZSMB_CREDENTIAL_FILE must name an existing credential file on the VM; run key1/key2 tests directly on the VM' >&2
 	exit 1
